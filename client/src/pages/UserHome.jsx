@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import api from '../services/api';
@@ -21,6 +21,11 @@ const UserHome = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' });
+
+  const [doctorSearch, setDoctorSearch] = useState('');
+  const [cityFilter, setCityFilter] = useState('All');
+  const [specialtyFilter, setSpecialtyFilter] = useState('All');
+  const [availableOnly, setAvailableOnly] = useState(false);
 
   const handleEditProfileSubmit = async (e) => {
     e.preventDefault();
@@ -46,10 +51,13 @@ const UserHome = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchFreshUserData = async () => {
       const data = JSON.parse(localStorage.getItem('userData'));
       try {
         const res = await api.post('/user/getuserdata', { userId: data?._id });
+        if (cancelled) return;
         if (res.data.success) {
           const fresh = { ...res.data.data, password: undefined };
           localStorage.setItem('userData', JSON.stringify(fresh));
@@ -61,37 +69,39 @@ const UserHome = () => {
           setNotifications(merged);
         }
       } catch {
-        console.log("Failed to fetch fresh user data");
+        if (!cancelled) console.log("Failed to fetch fresh user data");
       }
     };
 
     const fetchDoctors = async () => {
       try {
         const res = await api.get('/user/getalldoctorsu');
+        if (cancelled) return;
         if (res.data.success) {
           setDoctors(res.data.data);
-        } else {
-          message.error(res.data.message);
         }
       } catch {
-        message.error("Failed to fetch doctors");
+        if (!cancelled) console.log("Failed to fetch doctors");
       }
     };
 
     const fetchAppointments = async () => {
       try {
         const res = await api.get('/user/getuserappointments');
+        if (cancelled) return;
         if (res.data.success) {
           setAppointments(res.data.data);
         }
       } catch {
-        console.log("Failed to fetch appointments");
+        if (!cancelled) console.log("Failed to fetch appointments");
       }
     };
 
     fetchFreshUserData();
     fetchDoctors();
     fetchAppointments();
+
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -126,6 +136,44 @@ const UserHome = () => {
   }).length;
   const completedCount = appointments.filter(a => a.status === 'completed').length;
   const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const uniqueCities = useMemo(() => {
+    const cities = new Set();
+    doctors.forEach(d => {
+      const addr = d.address || '';
+      const parts = addr.split(',').map(s => s.trim()).filter(Boolean);
+      if (parts.length > 1) cities.add(parts[parts.length - 1]);
+      else if (parts.length === 1 && parts[0]) cities.add(parts[0]);
+    });
+    return ['All', ...Array.from(cities).sort()];
+  }, [doctors]);
+
+  const uniqueSpecialties = useMemo(() => {
+    const specs = new Set();
+    doctors.forEach(d => { if (d.specialization) specs.add(d.specialization); });
+    return ['All', ...Array.from(specs).sort()];
+  }, [doctors]);
+
+  const filteredDoctors = useMemo(() => {
+    return doctors.filter(d => {
+      const q = doctorSearch.toLowerCase().trim();
+      if (q) {
+        const name = (d.fullName || '').toLowerCase();
+        const spec = (d.specialization || '').toLowerCase();
+        const addr = (d.address || '').toLowerCase();
+        if (!name.includes(q) && !spec.includes(q) && !addr.includes(q)) return false;
+      }
+      if (specialtyFilter !== 'All' && d.specialization !== specialtyFilter) return false;
+      if (availableOnly && !d.isAvailable) return false;
+      if (cityFilter !== 'All') {
+        const addr = d.address || '';
+        const parts = addr.split(',').map(s => s.trim()).filter(Boolean);
+        const city = parts.length > 1 ? parts[parts.length - 1] : (parts[0] || '');
+        if (city !== cityFilter) return false;
+      }
+      return true;
+    });
+  }, [doctors, doctorSearch, cityFilter, specialtyFilter, availableOnly]);
 
   return (
     <div className="d-flex" style={{ height: '100vh', width: '100%', overflow: 'hidden' }}>
@@ -258,6 +306,80 @@ const UserHome = () => {
           max-width: 440px;
           width: 100%;
           box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+        }
+        .filter-section {
+          background: white;
+          border-radius: 20px;
+          padding: 24px 28px;
+          border: 1px solid #E2E8F0;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          margin-bottom: 28px;
+        }
+        .filter-search-input {
+          width: 100%;
+          padding: 12px 16px 12px 44px;
+          border: 1px solid #E2E8F0;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: 500;
+          color: #1E293B;
+          background-color: #F8FAFC;
+          transition: all 0.2s ease;
+          outline: none;
+        }
+        .filter-search-input:focus {
+          border-color: #2563EB;
+          background-color: white;
+          box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
+        }
+        .filter-search-input::placeholder {
+          color: #94A3B8;
+          font-weight: 400;
+        }
+        .filter-dropdown {
+          padding: 10px 14px;
+          border: 1px solid #E2E8F0;
+          border-radius: 10px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #1E293B;
+          background-color: #F8FAFC;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          outline: none;
+          appearance: auto;
+        }
+        .filter-dropdown:focus {
+          border-color: #2563EB;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+        }
+        .toggle-switch {
+          position: relative;
+          width: 44px;
+          height: 24px;
+          background-color: #CBD5E1;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: background-color 0.25s ease;
+          flex-shrink: 0;
+        }
+        .toggle-switch.active {
+          background-color: #2563EB;
+        }
+        .toggle-switch::after {
+          content: '';
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 18px;
+          height: 18px;
+          background: white;
+          border-radius: 50%;
+          transition: transform 0.25s ease;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .toggle-switch.active::after {
+          transform: translateX(20px);
         }
       `}</style>
 
@@ -437,17 +559,94 @@ const UserHome = () => {
         <div>
           {activeMenu === 'home' && (
             <div>
-              <h4 style={{ color: '#1E293B', fontWeight: '800', fontSize: '20px', marginBottom: '24px' }}>Verified Medical Practitioners</h4>
-              <div className="row g-4">
-                {doctors.map((doctor) => (
-                  <div key={doctor._id} className="col-md-6 col-lg-4">
-                    <DoctorCard doctor={doctor} userId={userData?._id} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <h4 style={{ color: '#1E293B', fontWeight: '800', fontSize: '20px', margin: 0 }}>Verified Medical Practitioners</h4>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748B' }}>
+                  {filteredDoctors.length} doctor{filteredDoctors.length !== 1 ? 's' : ''} found
+                </span>
+              </div>
+
+              <div className="filter-section">
+                <div className="row g-3 align-items-center">
+                  <div className="col-12 col-md-6 col-lg-4">
+                    <div style={{ position: 'relative' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      <input
+                        type="text"
+                        className="filter-search-input"
+                        placeholder="Search by name, specialization or city..."
+                        value={doctorSearch}
+                        onChange={(e) => setDoctorSearch(e.target.value)}
+                      />
+                    </div>
                   </div>
+                  <div className="col-6 col-md-3 col-lg-2">
+                    <select className="filter-dropdown" style={{ width: '100%' }} value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
+                      {uniqueCities.map(c => <option key={c} value={c}>{c === 'All' ? 'All Cities' : c}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-6 col-md-3 col-lg-2">
+                    <select className="filter-dropdown" style={{ width: '100%' }} value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
+                      {uniqueSpecialties.map(s => <option key={s} value={s}>{s === 'All' ? 'All Specialties' : s}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-12 col-md-6 col-lg-2">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div className={`toggle-switch ${availableOnly ? 'active' : ''}`} onClick={() => setAvailableOnly(!availableOnly)} />
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569', whiteSpace: 'nowrap' }}>Available Now</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '24px' }}>
+                {uniqueSpecialties.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSpecialtyFilter(s)}
+                    style={{
+                      padding: '8px 18px',
+                      borderRadius: '20px',
+                      border: specialtyFilter === s ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                      backgroundColor: specialtyFilter === s ? '#2563EB' : 'white',
+                      color: specialtyFilter === s ? 'white' : '#475569',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      whiteSpace: 'nowrap',
+                      boxShadow: specialtyFilter === s ? '0 2px 8px rgba(37,99,235,0.25)' : 'none'
+                    }}
+                  >
+                    {s === 'All' ? 'All' : s}
+                  </button>
                 ))}
               </div>
+
+              {filteredDoctors.length > 0 ? (
+                <div className="row g-4">
+                  {filteredDoctors.map((doctor) => (
+                    <div key={doctor._id} className="col-md-6 col-lg-4">
+                      <DoctorCard doctor={doctor} userId={userData?._id} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94A3B8' }}>
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '16px' }}>
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <p style={{ fontSize: '16px', fontWeight: '600', margin: '0 0 4px 0' }}>No doctors found</p>
+                  <p style={{ fontSize: '13px', margin: 0 }}>Try adjusting your search or filters</p>
+                </div>
+              )}
             </div>
           )}
-          {activeMenu === 'appointments' && <UserAppointments />}
+          {activeMenu === 'appointments' && <UserAppointments appointments={appointments} setAppointments={setAppointments} />}
           {activeMenu === 'applydoctor' && <ApplyDoctor userId={userData?._id} />}
           {activeMenu === 'notifications' && <Notifications notifications={notifications} setNotifications={setNotifications} />}
         </div>

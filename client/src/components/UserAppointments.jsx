@@ -1,29 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { message, Modal } from 'antd';
 import api from '../services/api';
 
-const UserAppointments = () => {
-  const [appointments, setAppointments] = useState([]);
+const UserAppointments = ({ appointments, setAppointments }) => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
   const [docPreview, setDocPreview] = useState({ open: false, file: null });
-
-  useEffect(() => {
-    fetchAppointments();
-  }, []);
-
-  const fetchAppointments = async () => {
-    try {
-      const res = await api.get('/user/getuserappointments');
-      if (res.data.success) {
-        setAppointments(res.data.data);
-      } else {
-        message.error(res.data.message);
-      }
-    } catch {
-      message.error("Failed to fetch appointments");
-    }
-  };
 
   const formatDateTime = (dateTimeStr) => {
     try {
@@ -99,7 +81,8 @@ const UserAppointments = () => {
           const res = await api.post('/user/cancelappointment', { appointmentId });
           if (res.data.success) {
             message.success("Appointment cancelled");
-            fetchAppointments();
+            const refreshed = await api.get('/user/getuserappointments');
+            if (refreshed.data.success) setAppointments(refreshed.data.data);
           } else {
             message.error(res.data.message);
           }

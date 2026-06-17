@@ -22,36 +22,43 @@ const AdminHome = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchUsers = async () => {
       try {
         const res = await api.get('/admin/getallusers');
+        if (cancelled) return;
         if (res.data.success) setUsers(res.data.data);
       } catch {
-        message.error("Failed to fetch users");
+        if (!cancelled) console.log("Failed to fetch users");
       }
     };
 
     const fetchDoctors = async () => {
       try {
         const res = await api.get('/admin/getalldoctors');
+        if (cancelled) return;
         if (res.data.success) setDoctors(res.data.data);
       } catch {
-        message.error("Failed to fetch doctors");
+        if (!cancelled) console.log("Failed to fetch doctors");
       }
     };
 
     const fetchAppointments = async () => {
       try {
         const res = await api.get('/admin/getallAppointmentsAdmin');
+        if (cancelled) return;
         if (res.data.success) setAppointments(res.data.data);
       } catch {
-        message.error("Failed to fetch appointments");
+        if (!cancelled) console.log("Failed to fetch appointments");
       }
     };
 
     fetchUsers();
     fetchDoctors();
     fetchAppointments();
+
+    return () => { cancelled = true; };
   }, []);
 
   const handleLogout = () => {
