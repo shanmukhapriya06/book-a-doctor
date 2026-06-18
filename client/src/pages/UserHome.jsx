@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import api from '../services/api';
@@ -15,6 +15,7 @@ const UserHome = () => {
   const [activeMenu, setActiveMenu] = useState('home');
   const [appointments, setAppointments] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
   const navigate = useNavigate();
 
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -26,6 +27,9 @@ const UserHome = () => {
   const [cityFilter, setCityFilter] = useState('All');
   const [specialtyFilter, setSpecialtyFilter] = useState('All');
   const [availableOnly, setAvailableOnly] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   const handleEditProfileSubmit = async (e) => {
     e.preventDefault();
@@ -87,6 +91,7 @@ const UserHome = () => {
 
     const fetchAppointments = async () => {
       try {
+        setLoadingAppointments(true);
         const res = await api.get('/user/getuserappointments');
         if (cancelled) return;
         if (res.data.success) {
@@ -94,6 +99,8 @@ const UserHome = () => {
         }
       } catch {
         if (!cancelled) console.log("Failed to fetch appointments");
+      } finally {
+        if (!cancelled) setLoadingAppointments(false);
       }
     };
 
@@ -130,12 +137,16 @@ const UserHome = () => {
     navigate('/login');
   };
 
-  const upcomingCount = appointments.filter(a => {
-    if (a.status?.toLowerCase() !== 'approved') return false;
-    try { return new Date(a.date).getTime() > Date.now(); } catch { return false; }
-  }).length;
-  const completedCount = appointments.filter(a => a.status === 'completed').length;
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const [now] = useState(() => Date.now());
+  const upcomingCount = useMemo(() => {
+    if (now === null) return 0;
+    return appointments.filter(a => {
+      if (a.status?.toLowerCase() !== 'approved') return false;
+      try { return new Date(a.date).getTime() > now; } catch { return false; }
+    }).length;
+  }, [appointments, now]);
+  const completedCount = useMemo(() => appointments.filter(a => a.status === 'completed').length, [appointments]);
+  const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
   const uniqueCities = useMemo(() => {
     const cities = new Set();
@@ -194,6 +205,31 @@ const UserHome = () => {
           flex-shrink: 0;
           z-index: 10;
           overflow-y: auto;
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sidebar-overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.5);
+          z-index: 9;
+        }
+        .mobile-toggle {
+          display: none;
+          position: fixed;
+          top: 16px;
+          left: 16px;
+          z-index: 11;
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          background: #0F172A;
+          border: none;
+          color: white;
+          cursor: pointer;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
         .menu-item-custom {
           display: flex;
@@ -208,6 +244,7 @@ const UserHome = () => {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           margin-bottom: 8px;
           border: 1px solid transparent;
+          min-height: 48px;
         }
         .menu-item-custom:hover {
           background-color: rgba(255, 255, 255, 0.04);
@@ -278,6 +315,7 @@ const UserHome = () => {
           color: #1E293B;
           cursor: pointer;
           transition: background 0.15s ease;
+          min-height: 44px;
         }
         .avatar-dropdown-item:hover {
           background: #F1F5F9;
@@ -298,6 +336,7 @@ const UserHome = () => {
           align-items: center;
           justify-content: center;
           z-index: 1050;
+          padding: 16px;
         }
         .modal-box {
           background: white;
@@ -315,6 +354,13 @@ const UserHome = () => {
           box-shadow: 0 1px 3px rgba(0,0,0,0.04);
           margin-bottom: 28px;
         }
+        .filter-search-icon {
+          position: absolute;
+          left: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          pointer-events: none;
+        }
         .filter-search-input {
           width: 100%;
           padding: 12px 16px 12px 44px;
@@ -326,6 +372,7 @@ const UserHome = () => {
           background-color: #F8FAFC;
           transition: all 0.2s ease;
           outline: none;
+          min-height: 48px;
         }
         .filter-search-input:focus {
           border-color: #2563EB;
@@ -348,6 +395,8 @@ const UserHome = () => {
           transition: all 0.2s ease;
           outline: none;
           appearance: auto;
+          min-height: 48px;
+          width: 100%;
         }
         .filter-dropdown:focus {
           border-color: #2563EB;
@@ -355,10 +404,10 @@ const UserHome = () => {
         }
         .toggle-switch {
           position: relative;
-          width: 44px;
-          height: 24px;
+          width: 48px;
+          height: 28px;
           background-color: #CBD5E1;
-          border-radius: 12px;
+          border-radius: 14px;
           cursor: pointer;
           transition: background-color 0.25s ease;
           flex-shrink: 0;
@@ -371,8 +420,8 @@ const UserHome = () => {
           position: absolute;
           top: 3px;
           left: 3px;
-          width: 18px;
-          height: 18px;
+          width: 22px;
+          height: 22px;
           background: white;
           border-radius: 50%;
           transition: transform 0.25s ease;
@@ -381,9 +430,228 @@ const UserHome = () => {
         .toggle-switch.active::after {
           transform: translateX(20px);
         }
+        .specialty-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-bottom: 24px;
+        }
+        .specialty-chip {
+          padding: 8px 18px;
+          border-radius: 20px;
+          border: 1px solid #E2E8F0;
+          background-color: white;
+          color: #475569;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          min-height: 40px;
+          display: inline-flex;
+          align-items: center;
+        }
+        .specialty-chip:active {
+          transform: scale(0.96);
+        }
+        .specialty-chip.active {
+          border-color: #2563EB;
+          background-color: #2563EB;
+          color: white;
+          box-shadow: 0 2px 8px rgba(37,99,235,0.25);
+        }
+
+        .section-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 24px;
+        }
+
+        @media (max-width: 991px) {
+          .sidebar-custom {
+            transform: translateX(-100%);
+          }
+          .sidebar-custom.open {
+            transform: translateX(0);
+          }
+          .sidebar-overlay.visible {
+            display: block;
+          }
+          .mobile-toggle {
+            display: flex;
+          }
+          .content-custom {
+            margin-left: 0;
+            padding: 24px 16px;
+            padding-top: 72px;
+          }
+          .welcome-banner {
+            padding: 24px 20px !important;
+            border-radius: 16px !important;
+          }
+          .welcome-banner h2 {
+            font-size: 22px !important;
+          }
+          .welcome-banner p {
+            font-size: 13px !important;
+          }
+          .stat-card-custom {
+            padding: 18px;
+            gap: 14px;
+          }
+          .stat-icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+          }
+          .stat-icon-box svg {
+            width: 20px;
+            height: 20px;
+          }
+          .filter-section {
+            padding: 16px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+          }
+          .filter-section .row {
+            gap: 12px !important;
+          }
+          .filter-section .row > div {
+            flex: 0 0 100%;
+            max-width: 100%;
+          }
+          .specialty-chips {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding-bottom: 4px;
+            gap: 8px;
+            margin-bottom: 20px;
+          }
+          .specialty-chips::-webkit-scrollbar {
+            display: none;
+          }
+          .specialty-chip {
+            flex-shrink: 0;
+            padding: 8px 16px;
+            font-size: 12px;
+          }
+          .section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+          }
+          .section-header span {
+            font-size: 12px !important;
+          }
+        }
+
+        @media (min-width: 576px) and (max-width: 991px) {
+          .content-custom {
+            padding: 28px 24px;
+            padding-top: 72px;
+          }
+          .filter-section .row > div.col-6 {
+            flex: 0 0 50%;
+            max-width: 50%;
+          }
+          .filter-section .row > div.col-12 {
+            flex: 0 0 100%;
+            max-width: 100%;
+          }
+        }
+
+        @media (max-width: 425px) {
+          .content-custom {
+            padding: 16px 12px;
+            padding-top: 68px;
+          }
+          .welcome-banner {
+            padding: 20px 16px !important;
+            border-radius: 14px !important;
+            margin-bottom: 20px !important;
+          }
+          .welcome-banner h2 {
+            font-size: 19px !important;
+            margin-bottom: 6px !important;
+          }
+          .welcome-banner p {
+            font-size: 12px !important;
+            line-height: 1.5 !important;
+          }
+          .stat-card-custom {
+            padding: 16px;
+            gap: 12px;
+            border-radius: 14px;
+          }
+          .stat-icon-box {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+          }
+          .stat-icon-box svg {
+            width: 18px;
+            height: 18px;
+          }
+          .stat-card-custom > div:last-child > div:first-child {
+            font-size: 11px !important;
+          }
+          .stat-card-custom > div:last-child > div:last-child {
+            font-size: 22px !important;
+          }
+          .filter-section {
+            padding: 14px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+          }
+          .filter-search-input {
+            font-size: 16px;
+            padding: 12px 14px 12px 42px;
+            border-radius: 10px;
+          }
+          .filter-search-icon {
+            left: 12px;
+          }
+          .modal-box {
+            padding: 24px;
+            border-radius: 16px;
+          }
+        }
+
+        @media (max-width: 375px) {
+          .content-custom {
+            padding: 12px 10px;
+            padding-top: 64px;
+          }
+          .welcome-banner {
+            padding: 18px 14px !important;
+          }
+          .welcome-banner h2 {
+            font-size: 17px !important;
+          }
+          .stat-card-custom {
+            padding: 14px 12px;
+            gap: 10px;
+          }
+          .filter-search-input {
+            font-size: 16px;
+          }
+        }
       `}</style>
 
-      <div className="sidebar-custom">
+      <button className="mobile-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Toggle menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {sidebarOpen
+            ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>
+            : <><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></>
+          }
+        </svg>
+      </button>
+      <div className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={closeSidebar} />
+
+      <div className={`sidebar-custom ${sidebarOpen ? 'open' : ''}`}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '48px', paddingLeft: '8px' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
@@ -393,7 +661,7 @@ const UserHome = () => {
           </div>
 
           <div>
-            <div className={`menu-item-custom ${activeMenu === 'home' ? 'active' : ''}`} onClick={() => setActiveMenu('home')}>
+            <div className={`menu-item-custom ${activeMenu === 'home' ? 'active' : ''}`} onClick={() => { setActiveMenu('home'); closeSidebar(); }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                 <polyline points="9 22 9 12 15 12 15 22" />
@@ -401,7 +669,7 @@ const UserHome = () => {
               <span>Home</span>
             </div>
 
-            <div className={`menu-item-custom ${activeMenu === 'appointments' ? 'active' : ''}`} onClick={() => setActiveMenu('appointments')}>
+            <div className={`menu-item-custom ${activeMenu === 'appointments' ? 'active' : ''}`} onClick={() => { setActiveMenu('appointments'); closeSidebar(); }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                 <line x1="16" y1="2" x2="16" y2="6" />
@@ -411,7 +679,7 @@ const UserHome = () => {
               <span>Appointments</span>
             </div>
 
-            <div className={`menu-item-custom ${activeMenu === 'applydoctor' ? 'active' : ''}`} onClick={() => setActiveMenu('applydoctor')}>
+            <div className={`menu-item-custom ${activeMenu === 'applydoctor' ? 'active' : ''}`} onClick={() => { setActiveMenu('applydoctor'); closeSidebar(); }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
@@ -420,7 +688,7 @@ const UserHome = () => {
               <span>Apply Doctor</span>
             </div>
 
-            <div className={`menu-item-custom ${activeMenu === 'notifications' ? 'active' : ''}`} onClick={() => setActiveMenu('notifications')} style={{ justifyContent: 'space-between' }}>
+            <div className={`menu-item-custom ${activeMenu === 'notifications' ? 'active' : ''}`} onClick={() => { setActiveMenu('notifications'); closeSidebar(); }} style={{ justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -483,7 +751,7 @@ const UserHome = () => {
             </div>
           </div>
 
-          <div className="menu-item-custom" onClick={handleLogout} style={{ margin: 0 }}>
+          <div className="menu-item-custom" onClick={() => { handleLogout(); closeSidebar(); }} style={{ margin: 0, minHeight: '48px' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
@@ -497,7 +765,7 @@ const UserHome = () => {
       <div className="content-custom">
         {activeMenu === 'home' && (
           <>
-            <div style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%)', borderRadius: '24px', padding: '32px 40px', color: 'white', marginBottom: '32px', position: 'relative', overflow: 'hidden', boxShadow: '0 10px 20px rgba(59,130,246,0.1)' }}>
+            <div className="welcome-banner" style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%)', borderRadius: '24px', padding: '32px 40px', color: 'white', marginBottom: '32px', position: 'relative', overflow: 'hidden', boxShadow: '0 10px 20px rgba(59,130,246,0.1)' }}>
               <div style={{ position: 'absolute', top: '-20%', right: '-10%', width: '250px', height: '250px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
               <h2 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '8px' }}>Welcome Back, {userData?.name}! 👋</h2>
               <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '15px', margin: 0, maxWidth: '600px', lineHeight: '1.6' }}>
@@ -518,7 +786,11 @@ const UserHome = () => {
                   </div>
                   <div>
                     <div style={{ color: '#64748B', fontSize: '13px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Upcoming</div>
-                    <div style={{ color: '#1E293B', fontSize: '28px', fontWeight: '800', marginTop: '2px' }}>{upcomingCount}</div>
+                    <div style={{ color: '#1E293B', fontSize: '28px', fontWeight: '800', marginTop: '2px' }}>
+                      {loadingAppointments ? (
+                        <div className="spinner-border text-primary spinner-border-sm" role="status" style={{ width: '1.2rem', height: '1.2rem', borderWidth: '0.15em' }}></div>
+                      ) : upcomingCount}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -533,7 +805,11 @@ const UserHome = () => {
                   </div>
                   <div>
                     <div style={{ color: '#64748B', fontSize: '13px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Completed</div>
-                    <div style={{ color: '#1E293B', fontSize: '28px', fontWeight: '800', marginTop: '2px' }}>{completedCount}</div>
+                    <div style={{ color: '#1E293B', fontSize: '28px', fontWeight: '800', marginTop: '2px' }}>
+                      {loadingAppointments ? (
+                        <div className="spinner-border text-success spinner-border-sm" role="status" style={{ width: '1.2rem', height: '1.2rem', borderWidth: '0.15em' }}></div>
+                      ) : completedCount}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -559,7 +835,7 @@ const UserHome = () => {
         <div>
           {activeMenu === 'home' && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <div className="section-header">
                 <h4 style={{ color: '#1E293B', fontWeight: '800', fontSize: '20px', margin: 0 }}>Verified Medical Practitioners</h4>
                 <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748B' }}>
                   {filteredDoctors.length} doctor{filteredDoctors.length !== 1 ? 's' : ''} found
@@ -570,7 +846,7 @@ const UserHome = () => {
                 <div className="row g-3 align-items-center">
                   <div className="col-12 col-md-6 col-lg-4">
                     <div style={{ position: 'relative' }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                      <svg className="filter-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="11" cy="11" r="8" />
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
                       </svg>
@@ -584,42 +860,30 @@ const UserHome = () => {
                     </div>
                   </div>
                   <div className="col-6 col-md-3 col-lg-2">
-                    <select className="filter-dropdown" style={{ width: '100%' }} value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
+                    <select className="filter-dropdown" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
                       {uniqueCities.map(c => <option key={c} value={c}>{c === 'All' ? 'All Cities' : c}</option>)}
                     </select>
                   </div>
                   <div className="col-6 col-md-3 col-lg-2">
-                    <select className="filter-dropdown" style={{ width: '100%' }} value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
+                    <select className="filter-dropdown" value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
                       {uniqueSpecialties.map(s => <option key={s} value={s}>{s === 'All' ? 'All Specialties' : s}</option>)}
                     </select>
                   </div>
                   <div className="col-12 col-md-6 col-lg-2">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div className={`toggle-switch ${availableOnly ? 'active' : ''}`} onClick={() => setAvailableOnly(!availableOnly)} />
+                      <div className={`toggle-switch ${availableOnly ? 'active' : ''}`} role="switch" aria-checked={availableOnly} tabIndex={0} onClick={() => setAvailableOnly(!availableOnly)} onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setAvailableOnly(!availableOnly); } }} />
                       <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569', whiteSpace: 'nowrap' }}>Available Now</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '24px' }}>
+              <div className="specialty-chips">
                 {uniqueSpecialties.map(s => (
                   <button
                     key={s}
                     onClick={() => setSpecialtyFilter(s)}
-                    style={{
-                      padding: '8px 18px',
-                      borderRadius: '20px',
-                      border: specialtyFilter === s ? '1px solid #2563EB' : '1px solid #E2E8F0',
-                      backgroundColor: specialtyFilter === s ? '#2563EB' : 'white',
-                      color: specialtyFilter === s ? 'white' : '#475569',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      whiteSpace: 'nowrap',
-                      boxShadow: specialtyFilter === s ? '0 2px 8px rgba(37,99,235,0.25)' : 'none'
-                    }}
+                    className={`specialty-chip ${specialtyFilter === s ? 'active' : ''}`}
                   >
                     {s === 'All' ? 'All' : s}
                   </button>
@@ -646,7 +910,7 @@ const UserHome = () => {
               )}
             </div>
           )}
-          {activeMenu === 'appointments' && <UserAppointments appointments={appointments} setAppointments={setAppointments} />}
+          {activeMenu === 'appointments' && <UserAppointments appointments={appointments} setAppointments={setAppointments} loading={loadingAppointments} />}
           {activeMenu === 'applydoctor' && <ApplyDoctor userId={userData?._id} />}
           {activeMenu === 'notifications' && <Notifications notifications={notifications} setNotifications={setNotifications} />}
         </div>

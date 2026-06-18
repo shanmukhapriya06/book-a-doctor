@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { message, Modal } from 'antd';
 import api from '../services/api';
 
-const UserAppointments = ({ appointments, setAppointments }) => {
+const UserAppointments = ({ appointments, setAppointments, loading }) => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
   const [docPreview, setDocPreview] = useState({ open: false, file: null });
@@ -199,7 +199,14 @@ const UserAppointments = ({ appointments, setAppointments }) => {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '64px 20px', background: 'white', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.01)' }}>
+          <div className="spinner-border text-primary" role="status" style={{ width: '2.5rem', height: '2.5rem' }}>
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p style={{ color: '#64748B', fontWeight: '600', fontSize: '13px', marginTop: '14px', marginBottom: 0 }}>Loading your appointments...</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 20px', background: 'white', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="1.5" style={{ marginBottom: '12px' }}>
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />

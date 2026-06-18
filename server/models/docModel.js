@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const docSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'user'
+    ref: 'user',
+    index: true
   },
   fullName: {
     type: String,
