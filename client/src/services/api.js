@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const instance = axios.create({
-  baseURL: 'https://book-a-doctor-api-apio.onrender.com/',
+  baseURL: 'https://book-a-doctor-api-apio.onrender.com/api',
   maxBodyLength: 10 * 1024 * 1024,
   maxContentLength: 10 * 1024 * 1024,
 });
