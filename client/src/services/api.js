@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const instance = axios.create({
-  baseURL: 'http://localhost:8001/api',
+  baseURL: 'https://YOUR-RENDER-URL.onrender.com/api',
   maxBodyLength: 10 * 1024 * 1024,
   maxContentLength: 10 * 1024 * 1024,
 });
